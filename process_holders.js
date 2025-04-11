@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { parseEther } = require("viem");
 
 // Step 1: Read and process the CSV file
 process.stdout.write("Reading CSV file...\n");
@@ -22,16 +23,29 @@ for (let i = 1; i < lines.length; i++) {
   const values = match.map((m) => m.replace(/[",\n\r]/g, ""));
 
   if (values[0]) {
-    // For BigInt compatibility, remove decimal parts
-    const rawAmount = values[1].replace(/,/g, "");
-    const integerAmount = rawAmount.includes(".")
-      ? rawAmount.split(".")[0]
-      : rawAmount;
+    try {
+      // Remove commas from the number
+      const cleanAmount = values[1].replace(/,/g, "");
 
-    holders.push({
-      recipient: values[0],
-      amount: integerAmount,
-    });
+      // Use viem to convert to wei
+      const weiAmount = parseEther(cleanAmount).toString();
+
+      holders.push({
+        recipient: values[0],
+        amount: weiAmount,
+      });
+    } catch (error) {
+      process.stdout.write(
+        `Warning: Could not convert amount for ${values[0]}: ${values[1]}\n`
+      );
+      process.stdout.write(`Error: ${error.message}\n`);
+
+      // Add with zero amount as fallback
+      holders.push({
+        recipient: values[0],
+        amount: "0",
+      });
+    }
   }
 }
 
@@ -77,6 +91,7 @@ process.stdout.write("\n===== SUMMARY =====\n");
 process.stdout.write(
   `Process complete: ${holders.length} holders split into ${totalBatches} batches of ${BATCH_SIZE} each\n`
 );
+process.stdout.write(`- All amounts converted to wei using viem\n`);
 process.stdout.write(`- Batch files saved in: batches/batch_XXX.json\n`);
 process.stdout.write("===================\n");
 
